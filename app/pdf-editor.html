@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <link rel="icon" href="data:," />
+  <title>PDF Editor</title>
+  <style>
+    :root{
+      --bg:#e8ece9;--panel:#f7f9f7;--panel-2:#ffffff;--ink:#17201c;--muted:#58635d;
+      --line:#cbd3ce;--line-strong:#a8b3ac;--accent:#087b62;--accent-strong:#045a48;
+      --accent-soft:#d9efe8;--danger:#a83d36;--paper:#fff;--shadow:0 16px 42px rgba(21,37,29,.14);
+      --highlight:#ffd94c;--toolbar-h:68px;
+    }
+    @media(prefers-color-scheme:dark){
+      :root{
+        --bg:#111613;--panel:#18201c;--panel-2:#202923;--ink:#edf4f0;--muted:#aebbb4;
+        --line:#39453e;--line-strong:#536158;--accent:#4fd0a8;--accent-strong:#7be0bf;
+        --accent-soft:#173f34;--danger:#ff8b80;--paper:#fff;--shadow:0 20px 48px rgba(0,0,0,.42);
+      }
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:"Aptos","Segoe UI",system-ui,sans-serif;overflow:hidden}
+    button,input{font:inherit}
+    button{color:inherit}
+    .app{height:100%;display:grid;grid-template-rows:auto 1fr}
+    .toolbar{height:var(--toolbar-h);display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);z-index:20}
+    .tool-group{display:flex;align-items:center;gap:6px}
+    .tool-group+.tool-group{border-left:1px solid var(--line);padding-left:10px}
+    .spacer{flex:1}
+    .btn{height:42px;border:1px solid transparent;border-radius:10px;background:transparent;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font-weight:650;white-space:nowrap}
+    .btn:hover{background:var(--accent-soft)}
+    .btn:focus-visible,.text-entry:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 35%,transparent);outline-offset:2px}
+    .btn.primary{background:var(--accent);color:white}.btn.primary:hover{background:var(--accent-strong)}
+    @media(prefers-color-scheme:dark){.btn.primary{color:#092018}}
+    .btn.icon{width:42px;padding:0}.btn.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-strong)}
+    .btn:disabled{opacity:.42;cursor:not-allowed;background:transparent}
+    .btn svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round}
+    .label{font-size:13px}
+    .workspace{min-height:0;display:grid;grid-template-columns:250px 1fr}
+    .sidebar{background:var(--panel);border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:18px;min-width:0}
+    .doc-card{padding:2px 4px 14px;border-bottom:1px solid var(--line)}
+    .doc-name{font-weight:760;font-size:15px;line-height:1.35;overflow-wrap:anywhere}.doc-meta{color:var(--muted);font-size:12px;margin-top:5px}
+    .side-title{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 4px 8px}
+    .tools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .tool-tile{min-height:68px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2);cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:10px 12px;gap:6px;font-weight:700}
+    .tool-tile:hover{border-color:var(--accent)}.tool-tile.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-strong)}
+    .tool-tile svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round}
+    .text-settings{display:none;gap:8px;flex-direction:column}.text-settings.visible{display:flex}
+    .text-entry{width:100%;border:1px solid var(--line-strong);background:var(--panel-2);color:var(--ink);border-radius:9px;padding:9px 10px;min-height:40px}
+    .hint{font-size:12px;color:var(--muted);line-height:1.45}
+    .viewer{min-width:0;min-height:0;position:relative;display:grid;grid-template-rows:auto 1fr;background-color:var(--bg);background-image:radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--line-strong) 45%,transparent) 1px,transparent 0);background-size:18px 18px}
+    .viewer-head{height:48px;display:flex;align-items:center;justify-content:center;gap:10px;background:color-mix(in srgb,var(--panel) 94%,transparent);border-bottom:1px solid var(--line);backdrop-filter:blur(8px)}
+    .page-control{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700}.page-num{min-width:56px;text-align:center}
+    .stage{min-height:0;overflow:auto;padding:28px;display:flex;align-items:flex-start;justify-content:center;position:relative}
+    .paper-wrap{position:relative;background:var(--paper);box-shadow:var(--shadow);line-height:0;display:none;touch-action:none}
+    .paper-wrap.ready{display:block}
+    #pdfCanvas,#inkCanvas{display:block;max-width:100%;height:auto}
+    #inkCanvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+    .empty{align-self:center;margin:auto;width:min(570px,calc(100% - 34px));background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:38px;text-align:center;box-shadow:0 12px 32px rgba(21,37,29,.07)}
+    .empty.drag{border-color:var(--accent);background:var(--accent-soft)}
+    .empty-mark{width:64px;height:76px;margin:0 auto 20px;position:relative;border:2px solid var(--line-strong);border-radius:8px;background:var(--panel-2)}
+    .empty-mark:before,.empty-mark:after{content:"";position:absolute;left:14px;right:14px;height:2px;background:var(--line-strong)}
+    .empty-mark:before{top:25px;box-shadow:0 12px 0 var(--line-strong)}.empty-mark:after{top:49px;right:26px}
+    .empty h1{font-family:Georgia,"Times New Roman",serif;font-size:30px;line-height:1.1;margin:0 0 10px;font-weight:700}.empty p{color:var(--muted);line-height:1.55;margin:0 auto 24px;max-width:430px}
+    .empty-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+    .empty-note{font-size:12px;color:var(--muted);margin-top:16px}
+    .progress{position:absolute;inset:0;background:color-mix(in srgb,var(--bg) 80%,transparent);display:none;align-items:center;justify-content:center;z-index:15}.progress.visible{display:flex}
+    .progress-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 22px;box-shadow:var(--shadow);font-weight:750;display:flex;gap:12px;align-items:center}
+    .spinner{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--accent);animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+    .toast{position:fixed;right:18px;bottom:18px;max-width:min(380px,calc(100% - 36px));background:var(--ink);color:var(--panel-2);padding:12px 15px;border-radius:10px;font-size:13px;box-shadow:var(--shadow);transform:translateY(20px);opacity:0;pointer-events:none;transition:.18s ease;z-index:100}.toast.show{transform:none;opacity:1}
+    .mobile-tools{display:none}
+    input[type=file]{display:none}
+    .text-dialog{position:fixed;inset:0;background:rgba(6,14,10,.48);z-index:90;display:none;align-items:flex-end;justify-content:center;padding:16px}.text-dialog.open{display:flex}.text-dialog-card{width:min(520px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}.text-dialog-title{font:700 21px Georgia,"Times New Roman",serif;margin:0 0 7px}.text-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+    .shortcut{margin-top:auto;border-top:1px solid var(--line);padding:14px 4px 0;color:var(--muted);font-size:12px;line-height:1.5}
+    kbd{background:var(--panel-2);border:1px solid var(--line);border-bottom-color:var(--line-strong);padding:1px 5px;border-radius:4px;font-family:inherit;font-size:11px}
+    @media(max-width:780px){
+      :root{--toolbar-h:62px}
+      .workspace{display:block}.sidebar{display:none}.toolbar{padding:8px;gap:4px}.toolbar .label{display:none}.tool-group+.tool-group{padding-left:5px}.btn{padding:0 10px}.btn.icon{width:40px}.desktop-only{display:none!important}
+      .viewer{height:calc(100vh - var(--toolbar-h));grid-template-rows:44px 1fr auto}.viewer-head{height:44px}.stage{padding:16px 10px 24px}
+      .empty{padding:28px 20px}.empty h1{font-size:27px}.empty-mark{transform:scale(.86);margin-bottom:13px}
+      .mobile-tools{display:flex;height:70px;background:var(--panel);border-top:1px solid var(--line);align-items:center;justify-content:space-around;padding:5px max(6px,env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left));z-index:20}
+      .mobile-tool{border:0;background:transparent;min-width:58px;height:55px;color:var(--muted);font-size:10px;font-weight:750;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:9px}.mobile-tool.active{background:var(--accent-soft);color:var(--accent-strong)}.mobile-tool svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;stroke-linecap:round;stroke-linejoin:round}
+      .toast{bottom:84px}
+    }
+    @media print{
+      body{overflow:visible;background:white}.toolbar,.sidebar,.viewer-head,.mobile-tools,.empty,.toast{display:none!important}.app,.workspace,.viewer,.stage{display:block;height:auto;overflow:visible;background:white;padding:0}.paper-wrap{box-shadow:none;margin:0 auto}#inkCanvas{pointer-events:none}
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="toolbar" aria-label="Document toolbar">
+    <div class="tool-group">
+      <button class="btn" id="openBtn" title="Open PDF (Ctrl+O)">
+        <svg viewBox="0 0 24 24"><path d="M3 7.5h6l2 2h10v9.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 7.5V5a2 2 0 0 1 2-2h4l2 2h4"/></svg><span class="label">Open</span>
+      </button>
+      <button class="btn" id="scanBtn" title="Scan or import photos">
+        <svg viewBox="0 0 24 24"><path d="M4 7V5a2 2 0 0 1 2-2h2M16 3h2a2 2 0 0 1 2 2v2M20 17v2a2 2 0 0 1-2 2h-2M8 21H6a2 2 0 0 1-2-2v-2"/><path d="M7 12h10M8 15h8"/></svg><span class="label">Scan</span>
+      </button>
+    </div>
+    <div class="tool-group desktop-only">
+      <button class="btn icon" id="undoBtn" title="Undo annotation" disabled><svg viewBox="0 0 24 24"><path d="M9 8 4 12l5 4"/><path d="M5 12h8a6 6 0 0 1 6 6"/></svg></button>
+      <button class="btn icon" id="clearBtn" title="Clear annotations on this page" disabled><svg viewBox="0 0 24 24"><path d="m4 7 1 14h14l1-14M3 7h18M9 7V3h6v4"/><path d="M9 11v6M15 11v6"/></svg></button>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn primary" id="saveBtn" title="Save edited PDF (Ctrl+S)" disabled>
+      <svg viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg><span class="label">Save PDF</span>
+    </button>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <div class="doc-card">
+        <div class="doc-name" id="docName">No PDF open</div>
+        <div class="doc-meta" id="docMeta">Open a file or scan pages to begin.</div>
+      </div>
+      <section>
+        <h2 class="side-title">Annotate</h2>
+        <div class="tools">
+          <button class="tool-tile active" data-tool="pan"><svg viewBox="0 0 24 24"><path d="M8 11V6a2 2 0 0 1 4 0v4-6a2 2 0 0 1 4 0v6-4a2 2 0 0 1 4 0v7c0 5-3 8-8 8h-1c-3 0-5-2-7-5l-2-3a2 2 0 0 1 3-2l3 2"/></svg>Move</button>
+          <button class="tool-tile" data-tool="draw"><svg viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z"/><path d="m14 7 3 3"/></svg>Draw</button>
+          <button class="tool-tile" data-tool="highlight"><svg viewBox="0 0 24 24"><path d="m6 15 8-8 4 4-8 8H6zM14 7l2-2 4 4-2 2M4 21h10"/></svg>Highlight</button>
+          <button class="tool-tile" data-tool="text"><svg viewBox="0 0 24 24"><path d="M5 5h14M12 5v14M8 19h8"/></svg>Text</button>
+          <button class="tool-tile" data-tool="erase"><svg viewBox="0 0 24 24"><path d="m3 16 8-10a2 2 0 0 1 3 0l6 6a2 2 0 0 1 0 3l-6 6H8z"/><path d="m14 21-7-7"/></svg>Erase</button>
+        </div>
+      </section>
+      <div class="text-settings" id="textSettings">
+        <label class="side-title" for="annotationText">Text to place</label>
+        <input class="text-entry" id="annotationText" maxlength="120" placeholder="Type, then tap the page" />
+        <div class="hint">Text is placed where you click. Change the text and click again to add another note.</div>
+      </div>
+      <div class="shortcut">
+        <strong>Print:</strong> Save the edited PDF, then open it in your device’s PDF viewer and choose Print.<br><br>
+        <kbd>Ctrl</kbd> + <kbd>O</kbd> Open &nbsp; <kbd>Ctrl</kbd> + <kbd>S</kbd> Save
+      </div>
+    </aside>
+
+    <main class="viewer" id="viewer">
+      <div class="viewer-head">
+        <button class="btn icon" id="prevBtn" title="Previous page" disabled><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
+        <div class="page-control"><span>Page</span><span class="page-num" id="pageNum">— / —</span></div>
+        <button class="btn icon" id="nextBtn" title="Next page" disabled><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+      </div>
+      <div class="stage" id="stage">
+        <section class="empty" id="emptyState">
+          <div class="empty-mark" aria-hidden="true"></div>
+          <h1>Edit a PDF, right here</h1>
+          <p>Open a document to draw, highlight, erase, and add text. Or use your camera to turn paper pages into a PDF.</p>
+          <div class="empty-actions">
+            <button class="btn primary" id="emptyOpen">Open PDF</button>
+            <button class="btn" id="emptyScan">Scan pages</button>
+          </div>
+          <div class="empty-note">Drop a PDF or image files anywhere in this window.</div>
+        </section>
+        <div class="paper-wrap" id="paperWrap">
+          <canvas id="pdfCanvas"></canvas>
+          <canvas id="inkCanvas"></canvas>
+        </div>
+      </div>
+      <nav class="mobile-tools" aria-label="Annotation tools">
+        <button class="mobile-tool active" data-tool="pan"><svg viewBox="0 0 24 24"><path d="M8 11V6a2 2 0 0 1 4 0v4-6a2 2 0 0 1 4 0v6-4a2 2 0 0 1 4 0v7c0 5-3 8-8 8h-1c-3 0-5-2-7-5l-2-3a2 2 0 0 1 3-2l3 2"/></svg>Move</button>
+        <button class="mobile-tool" data-tool="draw"><svg viewBox="0 0 24 24"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10z"/></svg>Draw</button>
+        <button class="mobile-tool" data-tool="highlight"><svg viewBox="0 0 24 24"><path d="m6 15 8-8 4 4-8 8H6zM4 21h10"/></svg>Mark</button>
+        <button class="mobile-tool" data-tool="text"><svg viewBox="0 0 24 24"><path d="M5 5h14M12 5v14M8 19h8"/></svg>Text</button>
+        <button class="mobile-tool" data-tool="erase"><svg viewBox="0 0 24 24"><path d="m3 16 8-10a2 2 0 0 1 3 0l6 6a2 2 0 0 1 0 3l-6 6H8z"/></svg>Erase</button>
+      </nav>
+      <div class="progress" id="progress"><div class="progress-card"><span class="spinner"></span><span id="progressText">Opening PDF…</span></div></div>
+    </main>
+  </div>
+</div>
+<input type="file" id="pdfInput" accept="application/pdf,.pdf" tabindex="-1" aria-hidden="true" />
+<input type="file" id="scanInput" accept="image/jpeg,image/png,image/webp" capture="environment" multiple tabindex="-1" aria-hidden="true" />
+<div class="text-dialog" id="textDialog" role="dialog" aria-modal="true" aria-labelledby="textDialogTitle">
+  <div class="text-dialog-card">
+    <h2 class="text-dialog-title" id="textDialogTitle">Add text</h2>
+    <p class="hint">Enter your note, then tap its position on the PDF.</p>
+    <input class="text-entry" id="mobileAnnotationText" maxlength="120" placeholder="Type your note" />
+    <div class="text-dialog-actions"><button class="btn" id="cancelText">Cancel</button><button class="btn primary" id="applyText">Place on PDF</button></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script>
+(function(){
+  'use strict';
+  var pdfjsLib = window.pdfjsLib;
+  if (pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  var state={pdf:null,bytes:null,name:'document.pdf',page:1,pages:0,tool:'pan',drawing:false,annotations:{},undo:{},renderTask:null};
+  var $=function(id){return document.getElementById(id)};
+  var pdfCanvas=$('pdfCanvas'), inkCanvas=$('inkCanvas'), pctx=pdfCanvas.getContext('2d'), ictx=inkCanvas.getContext('2d');
+  var paper=$('paperWrap'), empty=$('emptyState'), stage=$('stage'), progress=$('progress'), toast=$('toast');
+  var start={x:0,y:0}, toastTimer;
+
+  function iconToast(msg){clearTimeout(toastTimer);toast.textContent=msg;toast.classList.add('show');toastTimer=setTimeout(function(){toast.classList.remove('show')},2800)}
+  function busy(on,msg){$('progressText').textContent=msg||'Working…';progress.classList.toggle('visible',on)}
+  function cleanName(name){return (name||'document.pdf').replace(/\.pdf$/i,'')+'-edited.pdf'}
+  function setDocUI(){
+    $('docName').textContent=state.name;
+    $('docMeta').textContent=state.pages+' page'+(state.pages===1?'':'s')+' · changes stay in this session until saved';
+    $('pageNum').textContent=state.page+' / '+state.pages;
+    $('prevBtn').disabled=state.page<=1;$('nextBtn').disabled=state.page>=state.pages;
+    $('saveBtn').disabled=false;$('clearBtn').disabled=false;
+    empty.style.display='none';paper.classList.add('ready');updateUndo();
+  }
+  function updateUndo(){var stack=state.undo[state.page]||[];$('undoBtn').disabled=!stack.length}
+  function saveOverlay(){if(!state.pdf)return;state.annotations[state.page]=inkCanvas.toDataURL('image/png')}
+  function snapshot(){if(!state.undo[state.page])state.undo[state.page]=[];state.undo[state.page].push(inkCanvas.toDataURL('image/png'));if(state.undo[state.page].length>20)state.undo[state.page].shift();updateUndo()}
+  function restoreData(url,done){ictx.clearRect(0,0,inkCanvas.width,inkCanvas.height);if(!url){if(done)done();return}var img=new Image();img.onload=function(){ictx.drawImage(img,0,0,inkCanvas.width,inkCanvas.height);if(done)done()};img.src=url}
+
+  async function renderPage(){
+    if(!state.pdf)return;
+    busy(true,'Rendering page…');
+    try{
+      var page=await state.pdf.getPage(state.page);
+      var unscaled=page.getViewport({scale:1});
+      var maxW=Math.max(280,Math.min(980,stage.clientWidth-56));
+      var maxH=Math.max(360,stage.clientHeight-56);
+      var fit=Math.min(maxW/unscaled.width,maxH/unscaled.height,1.65);
+      var viewport=page.getViewport({scale:fit*Math.max(1,Math.min(window.devicePixelRatio||1,2))});
+      pdfCanvas.width=Math.round(viewport.width);pdfCanvas.height=Math.round(viewport.height);
+      inkCanvas.width=pdfCanvas.width;inkCanvas.height=pdfCanvas.height;
+      paper.style.width=(viewport.width/Math.max(1,Math.min(window.devicePixelRatio||1,2)))+'px';
+      paper.style.height=(viewport.height/Math.max(1,Math.min(window.devicePixelRatio||1,2)))+'px';
+      await page.render({canvasContext:pctx,viewport:viewport}).promise;
+      restoreData(state.annotations[state.page]);
+      setDocUI();
+    }catch(e){console.error(e);iconToast('That page could not be rendered.')}finally{busy(false)}
+  }
+
+  async function loadPdfBytes(bytes,name){
+    if(!pdfjsLib||!window.PDFLib){iconToast('PDF tools did not load. Check your connection and reopen the app.');return}
+    busy(true,'Opening PDF…');
+    try{
+      var copy=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);
+      var doc=await pdfjsLib.getDocument({data:copy.slice()}).promise;
+      state.pdf=doc;state.bytes=copy;state.name=name||'document.pdf';state.page=1;state.pages=doc.numPages;state.annotations={};state.undo={};
+      await renderPage();
+      iconToast('PDF ready to edit');
+    }catch(e){console.error(e);busy(false);iconToast('This file could not be opened as a PDF.')}
+  }
+
+  async function openFiles(files){
+    if(!files||!files.length)return;
+    var first=files[0];
+    if(first.type==='application/pdf'||/\.pdf$/i.test(first.name)){loadPdfBytes(await first.arrayBuffer(),first.name);return}
+    var images=Array.prototype.filter.call(files,function(f){return /^image\/(jpeg|png|webp)$/.test(f.type)});
+    if(images.length)scanImages(images);else iconToast('Choose a PDF, JPG, PNG, or WebP file.');
+  }
+
+  async function scanImages(files){
+    if(!window.PDFLib){iconToast('PDF tools did not load. Check your connection.');return}
+    busy(true,'Building PDF from '+files.length+' image'+(files.length===1?'':'s')+'…');
+    try{
+      var doc=await PDFLib.PDFDocument.create();
+      for(var i=0;i<files.length;i++){
+        var f=files[i], raw=new Uint8Array(await f.arrayBuffer()), embedded;
+        if(f.type==='image/png')embedded=await doc.embedPng(raw);
+        else if(f.type==='image/jpeg')embedded=await doc.embedJpg(raw);
+        else{
+          var data=await imageFileToJpeg(f);embedded=await doc.embedJpg(data);
+        }
+        var size=embedded.scale(1), max=1440, scale=Math.min(1,max/Math.max(size.width,size.height));
+        var w=size.width*scale,h=size.height*scale;
+        var page=doc.addPage([w,h]);page.drawImage(embedded,{x:0,y:0,width:w,height:h});
+      }
+      var bytes=await doc.save();
+      await loadPdfBytes(bytes,'scanned-pages.pdf');
+      iconToast(files.length+' scanned page'+(files.length===1?'':'s')+' ready');
+    }catch(e){console.error(e);busy(false);iconToast('Those images could not be turned into a PDF.')}
+  }
+  function imageFileToJpeg(file){return new Promise(function(resolve,reject){var img=new Image(),url=URL.createObjectURL(file);img.onload=function(){var c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0);c.toBlob(function(blob){URL.revokeObjectURL(url);if(!blob)return reject(new Error('conversion failed'));blob.arrayBuffer().then(function(b){resolve(new Uint8Array(b))})},'image/jpeg',.92)};img.onerror=reject;img.src=url})}
+
+  async function savePdf(){
+    if(!state.bytes||!window.PDFLib)return;
+    saveOverlay();busy(true,'Saving annotations…');
+    try{
+      var doc=await PDFLib.PDFDocument.load(state.bytes.slice());
+      var pages=doc.getPages(), keys=Object.keys(state.annotations);
+      for(var i=0;i<keys.length;i++){
+        var n=parseInt(keys[i],10), data=state.annotations[n];if(!data)continue;
+        var png=await doc.embedPng(data), page=pages[n-1], size=page.getSize();
+        page.drawImage(png,{x:0,y:0,width:size.width,height:size.height});
+      }
+      var output=await doc.save(), blob=new Blob([output],{type:'application/pdf'}), url=URL.createObjectURL(blob), a=document.createElement('a');
+      a.href=url;a.download=cleanName(state.name);document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},1500);
+      iconToast('Saved '+cleanName(state.name));
+    }catch(e){console.error(e);iconToast('The edited PDF could not be saved.')}finally{busy(false)}
+  }
+
+  function setTool(tool){
+    state.tool=tool;
+    document.querySelectorAll('[data-tool]').forEach(function(el){el.classList.toggle('active',el.getAttribute('data-tool')===tool)});
+    $('textSettings').classList.toggle('visible',tool==='text');
+    inkCanvas.style.pointerEvents=tool==='pan'?'none':'auto';
+    inkCanvas.style.cursor=tool==='text'?'text':tool==='erase'?'cell':'crosshair';
+    if(tool==='text'&&window.innerWidth<=780){
+      $('mobileAnnotationText').value=$('annotationText').value;
+      $('textDialog').classList.add('open');
+      setTimeout(function(){$('mobileAnnotationText').focus()},60);
+    }
+  }
+  function point(ev){var r=inkCanvas.getBoundingClientRect();return{x:(ev.clientX-r.left)*(inkCanvas.width/r.width),y:(ev.clientY-r.top)*(inkCanvas.height/r.height)}}
+  function begin(ev){if(!state.pdf||state.tool==='pan')return;var p=point(ev);if(state.tool==='text'){var text=$('annotationText').value.trim();if(!text){iconToast('Type the annotation text first.');if(window.innerWidth<=780)setTool('text');return}snapshot();ictx.save();ictx.font=Math.max(22,inkCanvas.width/35)+'px sans-serif';ictx.fillStyle='#b3261e';ictx.textBaseline='top';var max=inkCanvas.width-p.x-10,words=text.split(' '),line='',y=p.y,lh=Math.max(29,inkCanvas.width/29);for(var i=0;i<words.length;i++){var test=line+words[i]+' ';if(ictx.measureText(test).width>max&&line){ictx.fillText(line,p.x,y);line=words[i]+' ';y+=lh}else line=test}ictx.fillText(line,p.x,y);ictx.restore();saveOverlay();return}snapshot();state.drawing=true;start=p;ictx.beginPath();ictx.moveTo(p.x,p.y);inkCanvas.setPointerCapture(ev.pointerId);ev.preventDefault()}
+  function move(ev){if(!state.drawing)return;var p=point(ev),scale=inkCanvas.width/Math.max(1,inkCanvas.getBoundingClientRect().width);ictx.lineCap='round';ictx.lineJoin='round';if(state.tool==='draw'){ictx.globalCompositeOperation='source-over';ictx.strokeStyle='#d72d25';ictx.globalAlpha=1;ictx.lineWidth=3*scale}else if(state.tool==='highlight'){ictx.globalCompositeOperation='source-over';ictx.strokeStyle='#ffd426';ictx.globalAlpha=.42;ictx.lineWidth=18*scale}else if(state.tool==='erase'){ictx.globalCompositeOperation='destination-out';ictx.globalAlpha=1;ictx.lineWidth=24*scale}ictx.lineTo(p.x,p.y);ictx.stroke();start=p;ev.preventDefault()}
+  function end(ev){if(!state.drawing)return;state.drawing=false;ictx.globalAlpha=1;ictx.globalCompositeOperation='source-over';saveOverlay();try{inkCanvas.releasePointerCapture(ev.pointerId)}catch(e){}}
+  function undo(){var s=state.undo[state.page]||[];if(!s.length)return;var prev=s.pop();restoreData(prev,function(){saveOverlay();updateUndo()})}
+  function clearPage(){if(!state.pdf)return;snapshot();ictx.clearRect(0,0,inkCanvas.width,inkCanvas.height);saveOverlay();iconToast('Annotations cleared on this page')}
+  async function go(delta){if(!state.pdf)return;saveOverlay();var next=state.page+delta;if(next<1||next>state.pages)return;state.page=next;await renderPage()}
+
+  $('openBtn').onclick=$('emptyOpen').onclick=function(){$('pdfInput').click()};
+  $('scanBtn').onclick=$('emptyScan').onclick=function(){$('scanInput').click()};
+  $('saveBtn').onclick=savePdf;$('prevBtn').onclick=function(){go(-1)};$('nextBtn').onclick=function(){go(1)};$('undoBtn').onclick=undo;$('clearBtn').onclick=clearPage;
+  $('pdfInput').onchange=function(){openFiles(this.files);this.value=''};$('scanInput').onchange=function(){openFiles(this.files);this.value=''};
+  $('applyText').onclick=function(){var value=$('mobileAnnotationText').value.trim();if(!value){iconToast('Enter some text first.');return}$('annotationText').value=value;$('textDialog').classList.remove('open');iconToast('Now tap the PDF to place your text')};
+  $('cancelText').onclick=function(){$('textDialog').classList.remove('open');setTool('pan')};
+  $('textDialog').addEventListener('click',function(e){if(e.target===$('textDialog')){$('textDialog').classList.remove('open');setTool('pan')}});
+  $('mobileAnnotationText').addEventListener('keydown',function(e){if(e.key==='Enter')$('applyText').click()});
+  $('annotationText').addEventListener('input',function(){$('mobileAnnotationText').value=this.value});
+  document.querySelectorAll('[data-tool]').forEach(function(el){el.addEventListener('click',function(){setTool(this.getAttribute('data-tool'))})});
+  inkCanvas.addEventListener('pointerdown',begin);inkCanvas.addEventListener('pointermove',move);inkCanvas.addEventListener('pointerup',end);inkCanvas.addEventListener('pointercancel',end);
+  ['dragenter','dragover'].forEach(function(type){document.addEventListener(type,function(e){e.preventDefault();empty.classList.add('drag')})});
+  ['dragleave','drop'].forEach(function(type){document.addEventListener(type,function(e){e.preventDefault();empty.classList.remove('drag')})});
+  document.addEventListener('drop',function(e){openFiles(e.dataTransfer.files)});
+  document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='o'){e.preventDefault();$('pdfInput').click()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();savePdf()}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo()}if(e.key==='ArrowLeft'&&document.activeElement===document.body)go(-1);if(e.key==='ArrowRight'&&document.activeElement===document.body)go(1)});
+  var resizeTimer;window.addEventListener('resize',function(){if(!state.pdf)return;saveOverlay();clearTimeout(resizeTimer);resizeTimer=setTimeout(renderPage,180)});
+  setTool('pan');
+})();
+</script>
+</body>
+</html>

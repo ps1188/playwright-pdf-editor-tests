@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+
+# Playwright outputs
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Generated test copy of the app (rebuilt by scripts/prepare-app.mjs)
+app/pdf-editor.local.html
+
+# OS / editor files
+.DS_Store
